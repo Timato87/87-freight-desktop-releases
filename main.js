@@ -6,7 +6,7 @@ autoUpdater.logger=log;
 autoUpdater.autoDownload=true;
 autoUpdater.autoInstallOnAppQuit=true;
 let win,view=null,active=null,updateReady=false;
-const PORTALS={admin:'https://87freight-admin.vercel.app/',company:'https://87freight-company.vercel.app/',employee:'https://87freight-employee.vercel.app/',carrier:'https://87freight-carrier.vercel.app/',broker:'https://87freight-broker.vercel.app/',shipper:'https://87freight-shipper.vercel.app/'};
+const PORTALS={admin:'https://87freight-admin.vercel.app/',broker:'https://87freight-broker.vercel.app/',carrier:'https://87freight-carrier.vercel.app/',company:'https://87freight-company.vercel.app/',employee:'https://87freight-employee.vercel.app/',shipper:'https://87freight-shipper.vercel.app/'};
 const portalHosts=new Map(Object.entries(PORTALS).map(([k,url])=>[new URL(url).hostname,k]));
 function parse(url){try{return new URL(url)}catch{return null}}
 function portalName(url){const u=parse(url);return u&&u.protocol==='https:'?portalHosts.get(u.hostname):null}
@@ -18,7 +18,7 @@ function initUpdates(){
  autoUpdater.on('update-not-available',()=>notifyUpdate('current'));
  autoUpdater.on('download-progress',p=>notifyUpdate('downloading',Math.round(p.percent)+'%'));
  autoUpdater.on('update-downloaded',()=>{updateReady=true;notifyUpdate('ready')});
- autoUpdater.on('error',e=>{log.error('Updater',e);notifyUpdate('unavailable',e.message||'Cannot reach update feed')});
+ autoUpdater.on('error',e=>{log.error('Updater',e);notifyUpdate('unavailable')});
  autoUpdater.checkForUpdates().catch(e=>log.warn('Update check',e.message));
 }
 function bounds(){if(!win||!view)return;const [w,h]=win.getContentSize();view.setBounds({x:0,y:56,width:w,height:Math.max(100,h-56)});view.setAutoResize({width:true,height:true})}
@@ -46,7 +46,7 @@ function create(){
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Navigation',submenu:[{label:'Home',accelerator:'Alt+Home',click:home},{label:'Back',accelerator:'Alt+Left',click:back},{label:'Reload Portal',accelerator:'CmdOrCtrl+R',click:()=>view?view.webContents.reload():win.reload()},{role:'quit'}]},{label:'Portals',submenu:Object.keys(PORTALS).map(n=>({label:n,click:()=>openPortal(n)}))}]));
 }
 app.whenReady().then(()=>{
- ipcMain.handle('update-check',()=>{if(app.isPackaged)return autoUpdater.checkForUpdates().then(()=>true).catch(e=>{notifyUpdate('unavailable',e.message);return false});return false});
+ ipcMain.handle('update-check',()=>{if(app.isPackaged)return autoUpdater.checkForUpdates().then(()=>true).catch(e=>{notifyUpdate('unavailable');return false});return false});
  ipcMain.handle('update-restart',()=>{if(updateReady)autoUpdater.quitAndInstall(false,true)});
  ipcMain.handle('portal-open',(_e,name)=>openPortal(name));ipcMain.handle('portal-home',home);ipcMain.handle('portal-back',back);
  ipcMain.handle('portal-refresh',()=>{if(view)view.webContents.reloadIgnoringCache();else win.webContents.reloadIgnoringCache()});create();
