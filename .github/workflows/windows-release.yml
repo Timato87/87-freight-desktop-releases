@@ -24,6 +24,20 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Create version tag before publishing
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          git fetch --tags
+          if (git tag --list $tag) {
+            Write-Host "Release tag $tag already exists"
+          } else {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a $tag -m "87 Freight Desktop $version"
+            git push origin $tag
+          }
       - name: Build Windows installer and publish GitHub release
         shell: pwsh
         env:
