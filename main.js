@@ -17,7 +17,7 @@ function installIfIdle(){
   installingUpdate=true;
   log.info('Installing downloaded update while computer is idle');
   notifyUpdate('installing');
-  autoUpdater.quitAndInstall(false,true);
+  autoUpdater.quitAndInstall(true,true);
  }catch(e){installingUpdate=false;log.error('Idle update installation',e)}
 }
 function checkForUpdates(){
@@ -67,7 +67,7 @@ function create(){
 }
 app.whenReady().then(()=>{
  ipcMain.handle('update-check',()=>{if(app.isPackaged&&!updateReady){checkForUpdates();return true}return false});
- ipcMain.handle('update-restart',()=>{if(updateReady)autoUpdater.quitAndInstall(false,true)});
+ ipcMain.handle('update-restart',()=>{if(updateReady)autoUpdater.quitAndInstall(true,true)});
  ipcMain.handle('portal-open',(_e,name)=>openPortal(name));ipcMain.handle('portal-home',home);ipcMain.handle('portal-back',back);
  ipcMain.handle('portal-refresh',()=>{if(view)view.webContents.reloadIgnoringCache();else win.webContents.reloadIgnoringCache()});create();
  app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)create()});
