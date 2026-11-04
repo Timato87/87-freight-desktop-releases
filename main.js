@@ -1,11 +1,29 @@
-const {app,BrowserWindow,BrowserView,ipcMain,shell,Menu}=require('electron');
+const {app,BrowserWindow,BrowserView,ipcMain,shell,Menu,powerMonitor}=require('electron');
 const path=require('node:path');
 const {autoUpdater}=require('electron-updater');
 const log=require('electron-log');
 autoUpdater.logger=log;
 autoUpdater.autoDownload=true;
 autoUpdater.autoInstallOnAppQuit=true;
-let win,view=null,active=null,updateReady=false;
+let win,view=null,active=null,updateReady=false,updateDownloadedAt=0,installingUpdate=false;
+const UPDATE_CHECK_INTERVAL_MS=4*60*60*1000;
+const UPDATE_IDLE_SECONDS=5*60;
+const UPDATE_GRACE_MS=2*60*1000;
+function installIfIdle(){
+ if(!app.isPackaged||!updateReady||installingUpdate||!updateDownloadedAt)return;
+ if(Date.now()-updateDownloadedAt<UPDATE_GRACE_MS)return;
+ try{
+  if(powerMonitor.getSystemIdleTime()<UPDATE_IDLE_SECONDS)return;
+  installingUpdate=true;
+  log.info('Installing downloaded update while computer is idle');
+  notifyUpdate('installing');
+  autoUpdater.quitAndInstall(false,true);
+ }catch(e){installingUpdate=false;log.error('Idle update installation',e)}
+}
+function checkForUpdates(){
+ if(!app.isPackaged||installingUpdate||updateReady)return;
+ autoUpdater.checkForUpdates().catch(e=>log.warn('Update check',e.message));
+}
 const PORTALS={admin:'https://87freight-admin.vercel.app/',broker:'https://87freight-broker.vercel.app/',carrier:'https://87freight-carrier.vercel.app/',company:'https://87freight-company.vercel.app/',employee:'https://87freight-employee.vercel.app/',shipper:'https://87freight-shipper.vercel.app/'};
 const portalHosts=new Map(Object.entries(PORTALS).map(([k,url])=>[new URL(url).hostname,k]));
 function parse(url){try{return new URL(url)}catch{return null}}
@@ -17,9 +35,11 @@ function initUpdates(){
  autoUpdater.on('update-available',()=>notifyUpdate('downloading'));
  autoUpdater.on('update-not-available',()=>notifyUpdate('current'));
  autoUpdater.on('download-progress',p=>notifyUpdate('downloading',Math.round(p.percent)+'%'));
- autoUpdater.on('update-downloaded',()=>{updateReady=true;notifyUpdate('ready')});
+ autoUpdater.on('update-downloaded',()=>{updateReady=true;updateDownloadedAt=Date.now();notifyUpdate('ready')});
  autoUpdater.on('error',e=>{log.error('Updater',e);notifyUpdate('unavailable')});
- autoUpdater.checkForUpdates().catch(e=>log.warn('Update check',e.message));
+ checkForUpdates();
+ setInterval(checkForUpdates,UPDATE_CHECK_INTERVAL_MS).unref();
+ setInterval(installIfIdle,30*1000).unref();
 }
 function bounds(){if(!win||!view)return;const [w,h]=win.getContentSize();view.setBounds({x:0,y:56,width:w,height:Math.max(100,h-56)});view.setAutoResize({width:true,height:true})}
 function state(){if(win&&!win.isDestroyed())win.webContents.send('portal-state',{active,canGoBack:!!(view&&view.webContents.canGoBack())})}
@@ -46,7 +66,7 @@ function create(){
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Navigation',submenu:[{label:'Home',accelerator:'Alt+Home',click:home},{label:'Back',accelerator:'Alt+Left',click:back},{label:'Reload Portal',accelerator:'CmdOrCtrl+R',click:()=>view?view.webContents.reload():win.reload()},{role:'quit'}]},{label:'Portals',submenu:Object.keys(PORTALS).map(n=>({label:n,click:()=>openPortal(n)}))}]));
 }
 app.whenReady().then(()=>{
- ipcMain.handle('update-check',()=>{if(app.isPackaged)return autoUpdater.checkForUpdates().then(()=>true).catch(e=>{notifyUpdate('unavailable');return false});return false});
+ ipcMain.handle('update-check',()=>{if(app.isPackaged&&!updateReady){checkForUpdates();return true}return false});
  ipcMain.handle('update-restart',()=>{if(updateReady)autoUpdater.quitAndInstall(false,true)});
  ipcMain.handle('portal-open',(_e,name)=>openPortal(name));ipcMain.handle('portal-home',home);ipcMain.handle('portal-back',back);
  ipcMain.handle('portal-refresh',()=>{if(view)view.webContents.reloadIgnoringCache();else win.webContents.reloadIgnoringCache()});create();
